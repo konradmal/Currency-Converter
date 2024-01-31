@@ -46,8 +46,7 @@ After launching the program, the user interface provides the following functiona
 
 If you wish to browse or modify the code, use the available source files:
 
-- `file_name.py`: The main file containing the application logic.
-- `getApi.py`: A helper file for handling the API key.
+- `Converter.py`: The main file containing the application logic.
 
 ## Author
 
