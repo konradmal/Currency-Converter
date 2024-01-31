@@ -42,12 +42,6 @@ After launching the program, the user interface provides the following functiona
 - **Conversion Result**:
 - The conversion result is displayed below the button.
 
-## For Developers
-
-If you wish to browse or modify the code, use the available source files:
-
-- `Converter.py`: The main file containing the application logic.
-
 ## Author
 
 Author: Konrad Maleńczak
