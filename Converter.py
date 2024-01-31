@@ -5,38 +5,38 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdi
 
 API_KEY = getApi.getApi()
 
-def pobierz_kursy():
+def fetch_exchange_rates():
     url = f"https://api.exchangerate-api.com/v4/latest/USD?apiKey={API_KEY}"
     response = requests.get(url)
     return response.json()['rates']
 
-def konwertuj(kwota, kurs_zrodlowy, kurs_docelowy):
-    return kwota * (kurs_docelowy / kurs_zrodlowy)
+def convert_currency(amount, source_rate, target_rate):
+    return amount * (target_rate / source_rate)
 
 class CurrencyConverter(QWidget):
     def __init__(self):
         super().__init__()
-        self.kursy = {}
-        self.initUI()
+        self.exchange_rates = {}
+        self.initialize_ui()
     
-    def initUI(self):
-        self.setWindowTitle('Konwerter Walut')
+    def initialize_ui(self):
+        self.setWindowTitle('Currency Converter')
 
         layout = QVBoxLayout()
 
-        self.amountEdit = QLineEdit(self)
-        self.amountEdit.setPlaceholderText('Wprowadź kwotę')
-        layout.addWidget(self.amountEdit)
+        self.amountInput = QLineEdit(self)
+        self.amountInput.setPlaceholderText('Enter amount')
+        layout.addWidget(self.amountInput)
 
-        self.sourceCurrencyComboBox = QComboBox(self)
-        self.targetCurrencyComboBox = QComboBox(self)
-        waluty = ['PLN', 'EUR', 'USD', 'CHF', 'GBP']
-        self.sourceCurrencyComboBox.addItems(waluty)
-        self.targetCurrencyComboBox.addItems(waluty)
-        layout.addWidget(self.sourceCurrencyComboBox)
-        layout.addWidget(self.targetCurrencyComboBox)
+        self.sourceCurrencySelector = QComboBox(self)
+        self.targetCurrencySelector = QComboBox(self)
+        currencies = ['PLN', 'EUR', 'USD', 'CHF', 'GBP']
+        self.sourceCurrencySelector.addItems(currencies)
+        self.targetCurrencySelector.addItems(currencies)
+        layout.addWidget(self.sourceCurrencySelector)
+        layout.addWidget(self.targetCurrencySelector)
 
-        self.convertButton = QPushButton('Konwertuj', self)
+        self.convertButton = QPushButton('Convert', self)
         self.convertButton.clicked.connect(self.on_convert)
         layout.addWidget(self.convertButton)
 
@@ -48,17 +48,17 @@ class CurrencyConverter(QWidget):
 
     def on_convert(self):
         try:
-            kwota = float(self.amountEdit.text())
-            if not self.kursy:
-                self.kursy = pobierz_kursy()
-            waluta_zrodlowa = self.sourceCurrencyComboBox.currentText()
-            waluta_docelowa = self.targetCurrencyComboBox.currentText()
-            kurs_zrodlowy = self.kursy.get(waluta_zrodlowa, 1)
-            kurs_docelowy = self.kursy.get(waluta_docelowa, 1)
-            wynik = konwertuj(kwota, kurs_zrodlowy, kurs_docelowy)
-            self.resultLabel.setText(f"{kwota:.2f} {waluta_zrodlowa} to {wynik:.2f} {waluta_docelowa}")
+            amount = float(self.amountInput.text())
+            if not self.exchange_rates:
+                self.exchange_rates = fetch_exchange_rates()
+            source_currency = self.sourceCurrencySelector.currentText()
+            target_currency = self.targetCurrencySelector.currentText()
+            source_rate = self.exchange_rates.get(source_currency, 1)
+            target_rate = self.exchange_rates.get(target_currency, 1)
+            result = convert_currency(amount, source_rate, target_rate)
+            self.resultLabel.setText(f"{amount:.2f} {source_currency} to {result:.2f} {target_currency}")
         except ValueError:
-            self.resultLabel.setText("Proszę wprowadzić poprawną kwotę.")
+            self.resultLabel.setText("Please enter a valid amount.")
 
 def main():
     app = QApplication(sys.argv)
