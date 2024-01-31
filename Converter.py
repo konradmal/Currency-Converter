@@ -21,15 +21,19 @@ class CurrencyConverter(QWidget):
     
     def initialize_ui(self):
         self.setWindowTitle('Currency Converter')
+        self.setStyleSheet("font-family: Arial; background-color: #F5F5F5;")
 
         layout = QVBoxLayout()
 
         self.amountInput = QLineEdit(self)
         self.amountInput.setPlaceholderText('Enter amount')
+        self.amountInput.setStyleSheet("font-size: 16px;")
         layout.addWidget(self.amountInput)
 
         self.sourceCurrencySelector = QComboBox(self)
         self.targetCurrencySelector = QComboBox(self)
+        self.sourceCurrencySelector.setStyleSheet("font-size: 14px; background-color: #E8E8E8;")
+        self.targetCurrencySelector.setStyleSheet("font-size: 14px; background-color: #E8E8E8;")
         currencies = ['PLN', 'EUR', 'USD', 'CHF', 'GBP']
         self.sourceCurrencySelector.addItems(currencies)
         self.targetCurrencySelector.addItems(currencies)
@@ -37,10 +41,12 @@ class CurrencyConverter(QWidget):
         layout.addWidget(self.targetCurrencySelector)
 
         self.convertButton = QPushButton('Convert', self)
+        self.convertButton.setStyleSheet("background-color: #4CAF50; color: white; font-size: 16px;")
         self.convertButton.clicked.connect(self.on_convert)
         layout.addWidget(self.convertButton)
 
         self.resultLabel = QLabel('')
+        self.resultLabel.setStyleSheet("color: #333333; font-size: 18px;")
         layout.addWidget(self.resultLabel)
 
         self.setLayout(layout)
