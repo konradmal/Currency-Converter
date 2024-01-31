@@ -1,25 +1,12 @@
-import sys
-import requests
-import getApi
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox
-
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox
+from exchange_rates_api import ExchangeRatesApi
 
 class CurrencyConverter(QWidget):
     def __init__(self, api_key):
         super().__init__()
-        self.api_key = api_key
-        self.exchange_rates = self.fetch_exchange_rates()
+        self.api = ExchangeRatesApi(api_key)
+        self.exchange_rates = self.api.fetch_exchange_rates()
         self.initialize_ui()
-    
-    def fetch_exchange_rates(self):
-        url = f"https://api.exchangerate-api.com/v4/latest/USD?apiKey={self.api_key}"
-        response = requests.get(url)
-        return response.json()['rates']
-
-    def convert_currency(self, amount, source_currency, target_currency):
-        source_rate = self.exchange_rates.get(source_currency, 1)
-        target_rate = self.exchange_rates.get(target_currency, 1)
-        return amount * (target_rate / source_rate)
 
     def initialize_ui(self):
         self.setWindowTitle('Currency Converter')
@@ -75,18 +62,11 @@ class CurrencyConverter(QWidget):
             source_currency = self.sourceCurrencySelector.currentText()
             target_currency = self.targetCurrencySelector.currentText()
             result = self.convert_currency(amount, source_currency, target_currency)
-            self.resultLabel.setText(f"{amount:.2f} {source_currency} to {result:.2f} {target_currency}")
+            self.resultLabel.setText(f"{amount:.2f} {source_currency} is {result:.2f} {target_currency}")
         except ValueError:
             self.resultLabel.setText("Please enter a valid amount.")
 
-
-def main():
-    app = QApplication(sys.argv)
-    api_key = getApi.getApi()
-    ex = CurrencyConverter(api_key)
-    ex.show()
-    sys.exit(app.exec())
-
-
-if __name__ == '__main__':
-    main()
+    def convert_currency(self, amount, source_currency, target_currency):
+        source_rate = self.exchange_rates.get(source_currency, 1)
+        target_rate = self.exchange_rates.get(target_currency, 1)
+        return amount * (target_rate / source_rate)
