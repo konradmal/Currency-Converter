@@ -10,6 +10,7 @@ class CurrencyConverter(QWidget):
         self.api = ExchangeRatesApi(api_key)
         self.exchange_rates = self.api.fetch_exchange_rates()
         self.initialize_ui()
+        self.last_converted_value = None
 
     # Set up the initial user interface
     def initialize_ui(self):
@@ -24,6 +25,7 @@ class CurrencyConverter(QWidget):
         self.setup_result_label(layout)
         self.setLayout(layout)
         self.setGeometry(300, 300, 350, 200)
+        self.setup_swap_button(layout)
 
     # Set up input widgets for the user interface
     def setup_input_widgets(self, layout):
@@ -65,15 +67,38 @@ class CurrencyConverter(QWidget):
         button.setStyleSheet(style)
         button.clicked.connect(self.on_convert)
         return button
+    
+    # Set up the swap button
+    def setup_swap_button(self, layout):
+        self.swapButton = self.create_button('Swap', "background-color: #2196F3; color: white; font-size: 14px;")
+        self.swapButton.clicked.connect(self.on_swap)
+        layout.addWidget(self.swapButton)
+        
+    # Swap the values of source and target currency selectors
+    def on_swap(self):
+        source_index = self.sourceCurrencySelector.currentIndex()
+        target_index = self.targetCurrencySelector.currentIndex()
+        self.sourceCurrencySelector.setCurrentIndex(target_index)
+        self.targetCurrencySelector.setCurrentIndex(source_index)
+        if self.last_converted_value is not None:
+            self.amountInput.setText(str(self.last_converted_value))
+        self.on_convert()
 
     # Handle the conversion process when the convert button is clicked
     def on_convert(self):
+        input_text = self.amountInput.text().strip()
+        if not input_text:
+            self.resultLabel.setText("Please enter an amount to convert.")
+            return
+
         try:
-            amount = float(self.amountInput.text())
+            self.exchange_rates = self.api.fetch_exchange_rates()
+            amount = float(input_text)
             source_currency = self.sourceCurrencySelector.currentText()
             target_currency = self.targetCurrencySelector.currentText()
             result = self.convert_currency(amount, source_currency, target_currency)
             self.resultLabel.setText(f"{amount:.2f} {source_currency} is {result:.2f} {target_currency}")
+            self.last_converted_value = result  # Zapisz wynik konwersji
         except ValueError:
             self.resultLabel.setText("Please enter a valid amount.")
 
