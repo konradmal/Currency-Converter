@@ -1,5 +1,6 @@
 # Import required modules
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox
+from PyQt6.QtCore import QCoreApplication
 from exchange_rates_api import ExchangeRatesApi
 
 # Main class for the currency converter application
@@ -17,6 +18,14 @@ class CurrencyConverter(QWidget):
         self.setWindowTitle('Currency Converter')
         self.setStyleSheet("font-family: Arial; background-color: #F5F5F5;")
         self.setup_layout()
+        self.center_window()
+    
+    # Centers the window on the screen based on the screen's available geometry.
+    def center_window(self):
+        screen = QCoreApplication.instance().primaryScreen()
+        rect = screen.availableGeometry()
+        center_point = rect.center()
+        self.setGeometry(center_point.x() - self.width() // 2, center_point.y() - self.height() // 2, self.width(), self.height())
 
     # Define the layout of the user interface
     def setup_layout(self):
