@@ -24,20 +24,18 @@ class CurrencyConverter(QWidget):
         self.setup_input_widgets(layout)
         self.setup_result_label(layout)
         self.setLayout(layout)
-        self.setGeometry(300, 300, 350, 200)
+        self.setGeometry(300, 300, 300, 220)
         self.setup_swap_button(layout)
 
     # Set up input widgets for the user interface
     def setup_input_widgets(self, layout):
         self.amountInput = self.create_line_edit('Enter amount', "font-size: 16px;")
         layout.addWidget(self.amountInput)
-
         currencies = ['PLN', 'EUR', 'USD', 'CHF', 'GBP']
         self.sourceCurrencySelector = self.create_combo_box(currencies, "font-size: 14px; background-color: #E8E8E8;")
         self.targetCurrencySelector = self.create_combo_box(currencies, "font-size: 14px; background-color: #E8E8E8;")
         layout.addWidget(self.sourceCurrencySelector)
         layout.addWidget(self.targetCurrencySelector)
-
         self.convertButton = self.create_button('Convert', "background-color: #4CAF50; color: white; font-size: 16px;")
         layout.addWidget(self.convertButton)
 
@@ -90,15 +88,15 @@ class CurrencyConverter(QWidget):
         if not input_text:
             self.resultLabel.setText("Please enter an amount to convert.")
             return
-
         try:
             self.exchange_rates = self.api.fetch_exchange_rates()
             amount = float(input_text)
             source_currency = self.sourceCurrencySelector.currentText()
             target_currency = self.targetCurrencySelector.currentText()
             result = self.convert_currency(amount, source_currency, target_currency)
-            self.resultLabel.setText(f"{amount:.2f} {source_currency} is {result:.2f} {target_currency}")
-            self.last_converted_value = result  # Zapisz wynik konwersji
+            exchange_rate = self.exchange_rates.get(target_currency) / self.exchange_rates.get(source_currency)
+            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> = {result:.2f} <b>{target_currency}</b> <br> Rate 1 <b>{source_currency}</b> = {exchange_rate:.4f} <b>{target_currency}</b>")
+            self.last_converted_value = result
         except ValueError:
             self.resultLabel.setText("Please enter a valid amount.")
 
