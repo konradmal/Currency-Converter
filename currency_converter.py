@@ -34,7 +34,7 @@ class CurrencyConverter(QWidget):
         self.setup_input_widgets(layout)
         self.setup_result_label(layout)
         self.setLayout(layout)
-        self.setGeometry(300, 300, 300, 220)
+        self.setGeometry(0, 0, 420, 230)
         self.setup_swap_button(layout)
 
     # Set up input widgets for the user interface
@@ -105,7 +105,7 @@ class CurrencyConverter(QWidget):
             target_currency = self.targetCurrencySelector.currentText()
             result = self.convert_currency(amount, source_currency, target_currency)
             exchange_rate = self.exchange_rates.get(target_currency) / self.exchange_rates.get(source_currency)
-            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> is {result:.2f} <b>{target_currency}</b><br>Rate 1 <b>{source_currency}</b> = 1 {exchange_rate:.4f} <b>{target_currency}</b><br>According to the exchange rate from {self.last_update_date}")
+            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> = {result:.2f} <b>{target_currency}</b><br>Rate 1 <b>{source_currency}</b> = 1 {exchange_rate:.4f} <b>{target_currency}</b><br>According to the exchange rate from {self.last_update_date}")
         except ValueError:
             self.resultLabel.setText("Please enter a valid amount.")
 
