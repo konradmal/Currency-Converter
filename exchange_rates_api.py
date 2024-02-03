@@ -10,4 +10,7 @@ class ExchangeRatesApi:
     def fetch_exchange_rates(self):
         url = f"https://api.exchangerate-api.com/v4/latest/USD?apiKey={self.api_key}"
         response = requests.get(url)
-        return response.json()['rates']
+        data = response.json()
+        rates = data['rates']
+        date = data.get('date', 'No date available')
+        return rates, date

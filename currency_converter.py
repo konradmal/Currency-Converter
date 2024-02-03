@@ -12,6 +12,7 @@ class CurrencyConverter(QWidget):
         self.exchange_rates = self.api.fetch_exchange_rates()
         self.initialize_ui()
         self.last_converted_value = None
+        self.last_update_date = ""
 
     # Set up the initial user interface
     def initialize_ui(self):
@@ -98,14 +99,13 @@ class CurrencyConverter(QWidget):
             self.resultLabel.setText("Please enter an amount to convert.")
             return
         try:
-            self.exchange_rates = self.api.fetch_exchange_rates()
+            self.exchange_rates, self.last_update_date = self.api.fetch_exchange_rates()  # Zaktualizuj, aby otrzymać datę
             amount = float(input_text)
             source_currency = self.sourceCurrencySelector.currentText()
             target_currency = self.targetCurrencySelector.currentText()
             result = self.convert_currency(amount, source_currency, target_currency)
             exchange_rate = self.exchange_rates.get(target_currency) / self.exchange_rates.get(source_currency)
-            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> = {result:.2f} <b>{target_currency}</b> <br> Rate 1 <b>{source_currency}</b> = {exchange_rate:.4f} <b>{target_currency}</b>")
-            self.last_converted_value = result
+            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> is {result:.2f} <b>{target_currency}</b><br>Rate 1 <b>{source_currency}</b> = 1 {exchange_rate:.4f} <b>{target_currency}</b><br>According to the exchange rate from {self.last_update_date}")
         except ValueError:
             self.resultLabel.setText("Please enter a valid amount.")
 
