@@ -2,9 +2,24 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox
 from PyQt6.QtCore import QCoreApplication
 from exchange_rates_api import ExchangeRatesApi
+import re
+
+# A dictionary mapping ISO currency codes to their respective symbols for display purposes.
+currency_symbols = {
+    'USD': '$',
+    'EUR': '€',
+    'PLN': 'zł',
+    'GBP': '£',
+    'CHF': 'CHF',
+}
 
 # Main class for the currency converter application
 class CurrencyConverter(QWidget):
+    # Extracts and returns the ISO currency code (three uppercase letters) from the currency label.
+    def extract_currency_code(self, currency_label):
+        match = re.match(r"([A-Z]{3})", currency_label)
+        return match.group(0) if match else None
+    
     # Initialize the application with an API key
     def __init__(self, api_key):
         super().__init__()
@@ -65,7 +80,9 @@ class CurrencyConverter(QWidget):
     # Create a combo box widget
     def create_combo_box(self, items, style):
         combo_box = QComboBox(self)
-        combo_box.addItems(items)
+        for item in items:
+            symbol = currency_symbols.get(item, '')
+            combo_box.addItem(f"{item} ({symbol})")
         combo_box.setStyleSheet(style)
         return combo_box
 
@@ -99,10 +116,12 @@ class CurrencyConverter(QWidget):
             self.resultLabel.setText("Please enter an amount to convert.")
             return
         try:
-            self.exchange_rates, self.last_update_date = self.api.fetch_exchange_rates()  # Zaktualizuj, aby otrzymać datę
+            self.exchange_rates, self.last_update_date = self.api.fetch_exchange_rates()
             amount = float(input_text)
-            source_currency = self.sourceCurrencySelector.currentText()
-            target_currency = self.targetCurrencySelector.currentText()
+            source_currency_label = self.sourceCurrencySelector.currentText()
+            target_currency_label = self.targetCurrencySelector.currentText()
+            source_currency = self.extract_currency_code(source_currency_label)
+            target_currency = self.extract_currency_code(target_currency_label)
             result = self.convert_currency(amount, source_currency, target_currency)
             exchange_rate = self.exchange_rates.get(target_currency) / self.exchange_rates.get(source_currency)
             self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> = {result:.2f} <b>{target_currency}</b><br>Rate 1 <b>{source_currency}</b> = 1 {exchange_rate:.4f} <b>{target_currency}</b><br>According to the exchange rate from {self.last_update_date}")
