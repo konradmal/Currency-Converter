@@ -111,7 +111,7 @@ class CurrencyConverter(QWidget):
 
     # Handle the conversion process when the convert button is clicked
     def on_convert(self):
-        input_text = self.amountInput.text().strip()
+        input_text = self.amountInput.text().strip().replace(',', '.')
         if not input_text:
             self.resultLabel.setText("Please enter an amount to convert.")
             return
