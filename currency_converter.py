@@ -56,6 +56,7 @@ class CurrencyConverter(QWidget):
     def setup_input_widgets(self, layout):
         self.amountInput = self.create_line_edit('Enter amount', "font-size: 16px;")
         layout.addWidget(self.amountInput)
+        self.amountInput.returnPressed.connect(self.on_convert)
         currencies = ['PLN', 'EUR', 'USD', 'CHF', 'GBP']
         self.sourceCurrencySelector = self.create_combo_box(currencies, "font-size: 14px; background-color: #E8E8E8;")
         self.targetCurrencySelector = self.create_combo_box(currencies, "font-size: 14px; background-color: #E8E8E8;")
