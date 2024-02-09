@@ -125,7 +125,7 @@ class CurrencyConverter(QWidget):
             target_currency = self.extract_currency_code(target_currency_label)
             result = self.convert_currency(amount, source_currency, target_currency)
             exchange_rate = self.exchange_rates.get(target_currency) / self.exchange_rates.get(source_currency)
-            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> = {result:.2f} <b>{target_currency}</b><br>Rate 1 <b>{source_currency}</b> = 1 {exchange_rate:.4f} <b>{target_currency}</b><br>According to the exchange rate from {self.last_update_date}")
+            self.resultLabel.setText(f"{amount:.2f} <b>{source_currency}</b> = {result:.2f} <b>{target_currency}</b><br>Rate 1 <b>{source_currency}</b> = {exchange_rate:.4f} <b>{target_currency}</b><br>According to the exchange rate from {self.last_update_date}")
         except ValueError:
             self.resultLabel.setText("Please enter a valid amount.")
 
