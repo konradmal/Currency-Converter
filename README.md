@@ -15,14 +15,13 @@ Currency Converter is a simple program written in Python using PyQt6. It allows 
 ### Installation:
 
 - Install Python 3 if not already installed.
-- Install PyQt6 and requests using pip:
+- Install PyQt6 and requests using pip.
 - Clone the repository or download the project files.
 
 ### Running:
 
 - Open a terminal in the project folder.
 - Run the program with:
-
 
 ## Dependencies
 
