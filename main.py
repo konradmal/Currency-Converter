@@ -2,12 +2,12 @@
 import sys
 from PyQt6.QtWidgets import QApplication
 from currency_converter import CurrencyConverter
-import getApi
+import get_api
 
 # Define the main function to set up and run the application
 def main():
     app = QApplication(sys.argv)
-    api_key = getApi.getApi()
+    api_key = get_api.get_api()
     ex = CurrencyConverter(api_key)
     ex.show()
     sys.exit(app.exec())
