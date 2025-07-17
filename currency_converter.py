@@ -24,10 +24,10 @@ class CurrencyConverter(QWidget):
     def __init__(self, api_key):
         super().__init__()
         self.api = ExchangeRatesApi(api_key)
-        self.exchange_rates = self.api.fetch_exchange_rates()
-        self.initialize_ui()
+        self.exchange_rates, self.last_update_date = self.api.fetch_exchange_rates()
         self.last_converted_value = None
-        self.last_update_date = ""
+        self.initialize_ui()
+
 
     # Set up the initial user interface
     def initialize_ui(self):
