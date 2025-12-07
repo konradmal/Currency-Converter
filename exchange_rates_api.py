@@ -1,6 +1,6 @@
 import json
 from json import JSONDecodeError
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import requests
 from requests import RequestException
@@ -13,12 +13,24 @@ class ExchangeRatesApi:
     (rates_dict, date_string).
     It first tries to use the online API, and if that fails it falls back
     to the cached JSON file. If neither works, it raises RuntimeError.
+
+    Additionally, every successful fetch is appended to a simple local
+    history file, allowing the GUI to display charts of rate changes
+    over time.
     """
 
-    def __init__(self, api_key: str, base_currency: str = "USD", cache_file: str = "exchange_rates_cache.json", timeout: int = 5) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_currency: str = "USD",
+        cache_file: str = "exchange_rates_cache.json",
+        history_file: str = "exchange_rates_history.json",
+        timeout: int = 5,
+    ) -> None:
         self.api_key = api_key
         self.base_currency = base_currency
         self.cache_file = cache_file
+        self.history_file = history_file
         self.timeout = timeout
 
     def _build_url(self) -> str:
@@ -55,6 +67,7 @@ class ExchangeRatesApi:
 
             rates, date = self._extract_rates_and_date(data)
             self._save_cache(data)
+            self._append_history_snapshot(date, rates)
             return rates, date
 
         except (RequestException, ValueError, KeyError, TypeError) as api_exc:
@@ -62,6 +75,7 @@ class ExchangeRatesApi:
             try:
                 data = self._read_cache()
                 rates, date = self._extract_rates_and_date(data)
+                # Do not append to history here: it's already old data
                 return rates, date
             except (OSError, JSONDecodeError, ValueError, KeyError, TypeError) as cache_exc:
                 raise RuntimeError(
@@ -113,3 +127,102 @@ class ExchangeRatesApi:
         with open(self.cache_file, "r", encoding="utf-8") as file:
             data = json.load(file)
         return data
+
+    # ------------------------------------------------------------------
+    # SIMPLE LOCAL HISTORY
+    # ------------------------------------------------------------------
+    def _append_history_snapshot(self, date: str, rates: Dict[str, float]) -> None:
+        """Append a single snapshot (date + rates) to the history file.
+
+        If the last entry already has the same date, it is replaced.
+        Any error while writing history is ignored to avoid breaking
+        the main flow.
+        """
+        try:
+            history = self._read_history()
+        except Exception:
+            history = []
+
+        entry = {"date": date, "rates": rates}
+
+        if history and history[-1].get("date") == date:
+            history[-1] = entry
+        else:
+            history.append(entry)
+
+        try:
+            with open(self.history_file, "w", encoding="utf-8") as file:
+                json.dump(history, file)
+        except OSError:
+            # History write errors are non-fatal
+            pass
+
+    def _read_history(self) -> List[dict]:
+        """Read full history from the history file."""
+        with open(self.history_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        if not isinstance(data, list):
+            raise ValueError("History file must contain a list of entries.")
+        return data
+
+    def get_history(self) -> List[dict]:
+        """Public helper: safely return entire history list.
+
+        Returns an empty list if there is no valid history file yet.
+        """
+        try:
+            return self._read_history()
+        except (OSError, JSONDecodeError, ValueError, TypeError):
+            return []
+
+
+    def get_or_create_history(self, days: int = 365) -> List[dict]:
+        """Return existing history or fetch it from the API if missing.
+
+        By default it tries to load a local history file; if it does not
+        exist or is empty, it downloads approximately `days` days of data,
+        saves them to the history file and returns them.
+        """
+        history = self.get_history()
+        if history:
+            return history
+
+        history = self._fetch_history_series(days=days)
+        try:
+            with open(self.history_file, "w", encoding="utf-8") as file:
+                json.dump(history, file)
+        except OSError:
+            # Not fatal
+            pass
+        return history
+
+    def _fetch_history_series(self, days: int) -> List[dict]:
+        """Fetch historical daily rates for the last `days` days.
+
+        This implementation uses one request per day. Depending on your
+        API provider, you may want to replace this with a dedicated
+        time-series endpoint to stay within rate limits.
+        """
+        from datetime import date, timedelta
+
+        history: List[dict] = []
+
+        today = date.today()
+        start = today - timedelta(days=days - 1)
+
+        for i in range(days):
+            current = start + timedelta(days=i)
+            day_str = current.isoformat()
+            url = f"https://api.exchangerate-api.com/v4/{day_str}/{self.base_currency}?apiKey={self.api_key}"
+
+            try:
+                response = requests.get(url, timeout=self.timeout)
+                response.raise_for_status()
+                data = response.json()
+                rates, date_str = self._extract_rates_and_date(data)
+                history.append({"date": date_str, "rates": rates})
+            except (RequestException, JSONDecodeError, ValueError, KeyError, TypeError):
+                # Skip days we could not download
+                continue
+
+        return history

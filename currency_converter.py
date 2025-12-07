@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from PyQt6.QtWidgets import (
     QWidget,
@@ -16,6 +16,16 @@ from PyQt6.QtCore import Qt
 from exchange_rates_api import ExchangeRatesApi
 import re
 
+# Matplotlib is optional; we try to import it for charts.
+try:
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    MATPLOTLIB_AVAILABLE = True
+except Exception:  # ImportError or backend issues
+    MATPLOTLIB_AVAILABLE = False
+    FigureCanvas = None
+    Figure = None
+
 
 # A dictionary mapping ISO currency codes to their respective symbols
 # for display purposes.
@@ -28,12 +38,71 @@ currency_symbols: Dict[str, str] = {
 }
 
 
+class RatesChartWindow(QWidget):
+    """Simple window showing a line chart of rate changes over time."""
+
+    def __init__(
+        self,
+        history: List[dict],
+        source_currency: str,
+        target_currency: str,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+
+        self.setWindowTitle(f"Rate history: {source_currency} → {target_currency}")
+        self.resize(640, 360)
+
+        layout = QVBoxLayout(self)
+        if not MATPLOTLIB_AVAILABLE or Figure is None or FigureCanvas is None:
+            info = QLabel("Matplotlib is not available. Install it to see charts.")
+            layout.addWidget(info)
+            return
+
+        figure = Figure(figsize=(6, 3))
+        self.canvas = FigureCanvas(figure)
+        layout.addWidget(self.canvas)
+
+        ax = figure.add_subplot(111)
+
+        dates = []
+        values = []
+
+        for idx, snap in enumerate(history):
+            date = str(snap.get("date", idx + 1))
+            rates = snap.get("rates", {})
+            if (
+                not isinstance(rates, dict)
+                or source_currency not in rates
+                or target_currency not in rates
+            ):
+                continue
+            try:
+                value = float(rates[target_currency]) / float(rates[source_currency])
+            except Exception:
+                continue
+            dates.append(date)
+            values.append(value)
+
+        if not dates or not values:
+            ax.text(0.5, 0.5, "No data for the selected currency pair.", ha="center", va="center")
+        else:
+            ax.plot(dates, values, marker="o")
+            ax.set_xlabel("Date")
+            ax.set_ylabel(f"{target_currency} per {source_currency}")
+            ax.set_title(f"History: {source_currency} → {target_currency}")
+            ax.grid(True)
+
+        figure.tight_layout()
+        self.canvas.draw()
+
+
 class CurrencyConverter(QWidget):
     """GUI application for converting between currencies.
 
-    Compared to the previous version, this one focuses on a more
-    user-friendly layout and visual design, while keeping the
-    improved error handling and API usage.
+    This version focuses on a user-friendly layout and visual design,
+    and adds an optional chart showing historical rate changes based
+    on the locally stored history.
     """
 
     def __init__(self, api_key: str) -> None:
@@ -43,6 +112,7 @@ class CurrencyConverter(QWidget):
         self.exchange_rates: Dict[str, float] = {}
         self.last_update_date: str = ""
         self.last_converted_value: Optional[float] = None
+        self.chart_window: Optional[RatesChartWindow] = None
 
         self._init_ui()
         self._load_initial_rates()
@@ -52,7 +122,7 @@ class CurrencyConverter(QWidget):
     # ------------------------------------------------------------------
     def _init_ui(self) -> None:
         self.setWindowTitle("Currency Converter")
-        self.resize(560, 420)
+        self.resize(600, 440)
         self.setMinimumWidth(480)
 
         # Global style (simple dark theme)
@@ -150,10 +220,12 @@ class CurrencyConverter(QWidget):
         self.swapButton = self._create_button("Swap", self.on_swap, "secondaryButton")
         self.clearButton = self._create_button("Clear", self.on_clear, "secondaryButton")
         self.refreshButton = self._create_button("Refresh rates", self.on_refresh_rates, "secondaryButton")
+        self.chartButton = self._create_button("Show chart", self.on_show_chart, "secondaryButton")
 
         buttons_layout.addWidget(self.convertButton)
         buttons_layout.addWidget(self.swapButton)
         buttons_layout.addWidget(self.clearButton)
+        buttons_layout.addWidget(self.chartButton)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.refreshButton)
 
@@ -352,6 +424,28 @@ class CurrencyConverter(QWidget):
         self.resultMainLabel.setText("No conversion yet.")
         self.resultDetailsLabel.setText("")
         self._set_status("Cleared.", error=False)
+
+    def on_show_chart(self) -> None:
+        """Open a window with a chart of historical rate changes."""
+        if not MATPLOTLIB_AVAILABLE:
+            self._set_status("Matplotlib is not installed – charts are unavailable.", error=True)
+            return
+
+        history = self.api.get_history()
+        if len(history) < 2:
+            self._set_status("Not enough history yet to draw a chart.", error=False)
+            return
+
+        source_label = self.sourceCurrencySelector.currentText()
+        target_label = self.targetCurrencySelector.currentText()
+        source_currency = self.extract_currency_code(source_label)
+        target_currency = self.extract_currency_code(target_label)
+
+        # Reuse single chart window instance
+        self.chart_window = RatesChartWindow(history, source_currency, target_currency, self)
+        self.chart_window.show()
+        self.chart_window.raise_()
+        self.chart_window.activateWindow()
 
     # ------------------------------------------------------------------
     # HELPERS
