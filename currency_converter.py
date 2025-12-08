@@ -39,7 +39,12 @@ currency_symbols: Dict[str, str] = {
 
 
 class RatesChartWindow(QWidget):
-    """Simple window showing a line chart of rate changes over time."""
+    """Window responsible only for displaying the historical rate chart.
+
+    It is created when the user clicks "Show chart" in the main converter
+    window. The user can close this window with the "Back" button or the
+    standard window close button.
+    """
 
     def __init__(
         self,
@@ -51,23 +56,32 @@ class RatesChartWindow(QWidget):
         super().__init__(parent)
 
         self.setWindowTitle(f"Rate history: {source_currency} → {target_currency}")
-        self.resize(640, 360)
+        # Make the window larger so the chart is easier to read.
+        self.resize(900, 550)
 
+        # Main vertical layout: message / chart / buttons.
         layout = QVBoxLayout(self)
+
+        # Fallback when Matplotlib is not installed or backend is unavailable.
         if not MATPLOTLIB_AVAILABLE or Figure is None or FigureCanvas is None:
             info = QLabel("Matplotlib is not available. Install it to see charts.")
+            info.setWordWrap(True)
             layout.addWidget(info)
             return
 
-        figure = Figure(figsize=(6, 3))
+        # Create the figure and canvas with a larger logical size.
+        figure = Figure(figsize=(8.0, 4.5))
         self.canvas = FigureCanvas(figure)
         layout.addWidget(self.canvas)
 
         ax = figure.add_subplot(111)
 
-        dates = []
-        values = []
+        dates: List[str] = []
+        values: List[float] = []
 
+        # Build the time series: for each snapshot we compute
+        #   target_per_source = rate[target] / rate[source]
+        # which is "how many units of target currency you get for 1 source".
         for idx, snap in enumerate(history):
             date = str(snap.get("date", idx + 1))
             rates = snap.get("rates", {})
@@ -80,11 +94,14 @@ class RatesChartWindow(QWidget):
             try:
                 value = float(rates[target_currency]) / float(rates[source_currency])
             except Exception:
+                # Ignore broken entries instead of crashing the whole chart.
                 continue
             dates.append(date)
             values.append(value)
 
         if not dates or not values:
+            # When there is no usable data for this pair we show a clear message
+            # instead of an empty or misleading chart.
             ax.text(0.5, 0.5, "No data for the selected currency pair.", ha="center", va="center")
         else:
             ax.plot(dates, values, marker="o")
@@ -95,6 +112,15 @@ class RatesChartWindow(QWidget):
 
         figure.tight_layout()
         self.canvas.draw()
+
+        # Simple horizontal bar with a "Back" button below the chart.
+        # It only closes this window; the main converter stays open.
+        buttons_layout = QHBoxLayout()
+        back_button = QPushButton("Back")
+        back_button.clicked.connect(self.close)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(back_button)
+        layout.addLayout(buttons_layout)
 
 
 class CurrencyConverter(QWidget):
@@ -112,6 +138,8 @@ class CurrencyConverter(QWidget):
         self.exchange_rates: Dict[str, float] = {}
         self.last_update_date: str = ""
         self.last_converted_value: Optional[float] = None
+        # Reference to the last opened chart window. It is reused each time
+        # the user requests a chart for some pair.
         self.chart_window: Optional[RatesChartWindow] = None
 
         self._init_ui()
@@ -121,6 +149,7 @@ class CurrencyConverter(QWidget):
     # UI SETUP
     # ------------------------------------------------------------------
     def _init_ui(self) -> None:
+        """Build and configure the main converter window UI."""
         self.setWindowTitle("Currency Converter")
         self.resize(600, 440)
         self.setMinimumWidth(480)
@@ -173,7 +202,7 @@ class CurrencyConverter(QWidget):
         main_layout.setContentsMargins(18, 18, 18, 18)
         main_layout.setSpacing(14)
 
-        # Header
+        # Header with title and short description.
         header_layout = QVBoxLayout()
         title_label = QLabel("Currency Converter")
         title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
@@ -184,7 +213,7 @@ class CurrencyConverter(QWidget):
         header_layout.addSpacing(4)
         main_layout.addLayout(header_layout)
 
-        # Input card
+        # Input "card" with amount and currency selectors.
         input_card = QFrame()
         input_card.setObjectName("card")
         input_layout = QGridLayout(input_card)
@@ -195,6 +224,7 @@ class CurrencyConverter(QWidget):
         amount_label = QLabel("Amount")
         self.amountInput = QLineEdit()
         self.amountInput.setPlaceholderText("e.g. 100.50")
+        # Pressing Enter in the amount field triggers a conversion.
         self.amountInput.returnPressed.connect(self.on_convert)
 
         from_label = QLabel("From")
@@ -212,7 +242,7 @@ class CurrencyConverter(QWidget):
         input_layout.addWidget(to_label, 1, 2)
         input_layout.addWidget(self.targetCurrencySelector, 1, 3)
 
-        # Buttons row inside the card
+        # Buttons row inside the card: main actions + chart + refresh.
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(8)
 
@@ -233,7 +263,7 @@ class CurrencyConverter(QWidget):
 
         main_layout.addWidget(input_card)
 
-        # Result card
+        # Result "card": main conversion line + extra details.
         result_card = QFrame()
         result_card.setObjectName("card")
         result_layout = QVBoxLayout(result_card)
@@ -255,7 +285,7 @@ class CurrencyConverter(QWidget):
 
         main_layout.addWidget(result_card)
 
-        # Status and last update (footer)
+        # Status and last update (footer).
         footer_layout = QHBoxLayout()
         self.lastUpdateLabel = QLabel("")
         self.lastUpdateLabel.setStyleSheet("color: #9ca3af; font-size: 12px;")
@@ -280,6 +310,7 @@ class CurrencyConverter(QWidget):
         self.statusLabel.setText(text)
 
     def _create_button(self, text: str, callback, object_name: Optional[str] = None) -> QPushButton:
+        """Create a QPushButton with an optional object name and connect it."""
         button = QPushButton(text, self)
         if object_name:
             button.setObjectName(object_name)
@@ -287,7 +318,7 @@ class CurrencyConverter(QWidget):
         return button
 
     def _populate_currency_selectors(self) -> None:
-        """Fill the currency combo boxes with choices."""
+        """Fill the currency combo boxes with available currency codes."""
         self.sourceCurrencySelector.clear()
         self.targetCurrencySelector.clear()
 
@@ -296,7 +327,7 @@ class CurrencyConverter(QWidget):
             self.sourceCurrencySelector.addItem(label)
             self.targetCurrencySelector.addItem(label)
 
-        # Set some reasonable defaults if available
+        # Set some reasonable defaults if available.
         usd_label = "USD ($)"
         eur_label = "EUR (€)"
 
@@ -411,7 +442,7 @@ class CurrencyConverter(QWidget):
         self.targetCurrencySelector.setCurrentIndex(source_index)
 
         if self.last_converted_value is not None:
-            # Use the previous result as the new amount
+            # Use the previous result as the new amount.
             self.amountInput.setText(f"{self.last_converted_value:.2f}")
 
         if self.amountInput.text().strip():
@@ -426,11 +457,17 @@ class CurrencyConverter(QWidget):
         self._set_status("Cleared.", error=False)
 
     def on_show_chart(self) -> None:
-        """Open a window with a chart of historical rate changes."""
+        """Open or update a window with a chart of historical rate changes.
+
+        The data comes from the locally stored history JSON file which
+        you can build with the separate `build_history.py` script.
+        """
         if not MATPLOTLIB_AVAILABLE:
             self._set_status("Matplotlib is not installed – charts are unavailable.", error=True)
             return
 
+        # Load or create the history list from the API helper. The heavy work
+        # of downloading and saving history is done outside the GUI.
         history = self.api.get_history()
         if len(history) < 2:
             self._set_status("Not enough history yet to draw a chart.", error=False)
@@ -441,7 +478,8 @@ class CurrencyConverter(QWidget):
         source_currency = self.extract_currency_code(source_label)
         target_currency = self.extract_currency_code(target_label)
 
-        # Reuse single chart window instance
+        # Always create a fresh chart window so that each request uses the
+        # current pair and history, and the user has a dedicated "Back" button.
         self.chart_window = RatesChartWindow(history, source_currency, target_currency, self)
         self.chart_window.show()
         self.chart_window.raise_()
