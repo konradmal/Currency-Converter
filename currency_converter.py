@@ -1,6 +1,7 @@
 from typing import Dict, Optional, List
 
 from PyQt6.QtWidgets import (
+
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -10,8 +11,11 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QComboBox,
     QFrame,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt
+
+from PyQt6.QtGui import QGuiApplication
 
 from exchange_rates_api import ExchangeRatesApi
 import re
@@ -38,6 +42,7 @@ currency_symbols: Dict[str, str] = {
 }
 
 
+
 class RatesChartWindow(QWidget):
     """Window responsible only for displaying the historical rate chart.
 
@@ -53,13 +58,42 @@ class RatesChartWindow(QWidget):
         target_currency: str,
         parent: Optional[QWidget] = None,
     ) -> None:
-        super().__init__(parent)
+        # We do not pass the parent to QWidget so that this
+        # object becomes a separate top-level window. The
+        # optional `parent` argument is used only to position
+        # the window on the screen.
+        super().__init__()
 
         self.setWindowTitle(f"Rate history: {source_currency} → {target_currency}")
-        # Make the window larger so the chart is easier to read.
-        self.resize(900, 550)
 
-        # Main vertical layout: message / chart / buttons.
+        # Determine initial window size based on the parent window or screen.
+        # The chart window is opened as a separate top-level window, but we
+        # try to make it fill a reasonable part of the available space.
+        if parent is not None:
+            geom = parent.geometry()
+            width = int(geom.width() * 0.85)
+            height = int(geom.height() * 0.75)
+            self.resize(width, height)
+            self.move(
+                geom.x() + (geom.width() - width) // 2,
+                geom.y() + (geom.height() - height) // 2,
+            )
+        else:
+            screen = QGuiApplication.primaryScreen()
+            if screen is not None:
+                area = screen.availableGeometry()
+                width = int(area.width() * 0.8)
+                height = int(area.height() * 0.7)
+                self.resize(width, height)
+                self.move(
+                    area.x() + (area.width() - width) // 2,
+                    area.y() + (area.height() - height) // 2,
+                )
+            else:
+                # Sensible fallback when screen information is not available.
+                self.resize(900, 550)
+
+        # Main vertical layout: chart area + buttons row.
         layout = QVBoxLayout(self)
 
         # Fallback when Matplotlib is not installed or backend is unavailable.
@@ -69,12 +103,17 @@ class RatesChartWindow(QWidget):
             layout.addWidget(info)
             return
 
-        # Create the figure and canvas with a larger logical size.
-        figure = Figure(figsize=(8.0, 4.5))
-        self.canvas = FigureCanvas(figure)
-        layout.addWidget(self.canvas)
+        # Create the figure and canvas; the layout and size policy will make
+        # the canvas automatically follow the window size.
+        self.figure = Figure(figsize=(8.0, 4.5))
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        layout.addWidget(self.canvas, stretch=1)
 
-        ax = figure.add_subplot(111)
+        ax = self.figure.add_subplot(111)
 
         dates: List[str] = []
         values: List[float] = []
@@ -102,15 +141,42 @@ class RatesChartWindow(QWidget):
         if not dates or not values:
             # When there is no usable data for this pair we show a clear message
             # instead of an empty or misleading chart.
-            ax.text(0.5, 0.5, "No data for the selected currency pair.", ha="center", va="center")
+            ax.text(
+                0.5,
+                0.5,
+                "No data for the selected currency pair.",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+            )
         else:
-            ax.plot(dates, values, marker="o")
+            # Draw the line using numeric indices on the X axis.
+            x_values = list(range(len(dates)))
+            ax.plot(x_values, values, marker="o")
+
+            # Display grid only for the Y axis to keep the chart readable.
+            ax.grid(True, axis="y", alpha=0.3)
+
             ax.set_xlabel("Date")
             ax.set_ylabel(f"{target_currency} per {source_currency}")
             ax.set_title(f"History: {source_currency} → {target_currency}")
-            ax.grid(True)
 
-        figure.tight_layout()
+            # Limit the number of X axis labels to a reasonable amount.
+            max_labels = 10
+            n = len(dates)
+            step = max(1, n // max_labels)
+            tick_positions = list(range(0, n, step))
+            if tick_positions[-1] != n - 1:
+                tick_positions.append(n - 1)
+
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels(
+                [dates[i] for i in tick_positions],
+                rotation=45,
+                ha="right",
+            )
+
+        self.figure.tight_layout()
         self.canvas.draw()
 
         # Simple horizontal bar with a "Back" button below the chart.
@@ -122,7 +188,27 @@ class RatesChartWindow(QWidget):
         buttons_layout.addWidget(back_button)
         layout.addLayout(buttons_layout)
 
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        """Ensure the chart resizes together with the window.
 
+        The Qt layout already resizes the canvas widget, but we also update
+        the underlying Matplotlib figure size so that the drawing area uses
+        the available space more effectively.
+        """
+        super().resizeEvent(event)
+        if not MATPLOTLIB_AVAILABLE or not hasattr(self, "canvas"):
+            return
+        try:
+            fig = self.canvas.figure
+            dpi = fig.dpi or 100.0
+            width_in = max(self.canvas.width(), 1) / dpi
+            height_in = max(self.canvas.height(), 1) / dpi
+            fig.set_size_inches(width_in, height_in, forward=True)
+            fig.tight_layout()
+            self.canvas.draw_idle()
+        except Exception:
+            # Resizing issues should never break the UI.
+            pass
 class CurrencyConverter(QWidget):
     """GUI application for converting between currencies.
 
@@ -138,8 +224,6 @@ class CurrencyConverter(QWidget):
         self.exchange_rates: Dict[str, float] = {}
         self.last_update_date: str = ""
         self.last_converted_value: Optional[float] = None
-        # Reference to the last opened chart window. It is reused each time
-        # the user requests a chart for some pair.
         self.chart_window: Optional[RatesChartWindow] = None
 
         self._init_ui()
@@ -149,7 +233,6 @@ class CurrencyConverter(QWidget):
     # UI SETUP
     # ------------------------------------------------------------------
     def _init_ui(self) -> None:
-        """Build and configure the main converter window UI."""
         self.setWindowTitle("Currency Converter")
         self.resize(600, 440)
         self.setMinimumWidth(480)
@@ -202,7 +285,7 @@ class CurrencyConverter(QWidget):
         main_layout.setContentsMargins(18, 18, 18, 18)
         main_layout.setSpacing(14)
 
-        # Header with title and short description.
+        # Header
         header_layout = QVBoxLayout()
         title_label = QLabel("Currency Converter")
         title_label.setStyleSheet("font-size: 24px; font-weight: 700;")
@@ -213,7 +296,7 @@ class CurrencyConverter(QWidget):
         header_layout.addSpacing(4)
         main_layout.addLayout(header_layout)
 
-        # Input "card" with amount and currency selectors.
+        # Input card
         input_card = QFrame()
         input_card.setObjectName("card")
         input_layout = QGridLayout(input_card)
@@ -224,7 +307,6 @@ class CurrencyConverter(QWidget):
         amount_label = QLabel("Amount")
         self.amountInput = QLineEdit()
         self.amountInput.setPlaceholderText("e.g. 100.50")
-        # Pressing Enter in the amount field triggers a conversion.
         self.amountInput.returnPressed.connect(self.on_convert)
 
         from_label = QLabel("From")
@@ -242,7 +324,7 @@ class CurrencyConverter(QWidget):
         input_layout.addWidget(to_label, 1, 2)
         input_layout.addWidget(self.targetCurrencySelector, 1, 3)
 
-        # Buttons row inside the card: main actions + chart + refresh.
+        # Buttons row inside the card
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(8)
 
@@ -263,7 +345,7 @@ class CurrencyConverter(QWidget):
 
         main_layout.addWidget(input_card)
 
-        # Result "card": main conversion line + extra details.
+        # Result card
         result_card = QFrame()
         result_card.setObjectName("card")
         result_layout = QVBoxLayout(result_card)
@@ -285,7 +367,7 @@ class CurrencyConverter(QWidget):
 
         main_layout.addWidget(result_card)
 
-        # Status and last update (footer).
+        # Status and last update (footer)
         footer_layout = QHBoxLayout()
         self.lastUpdateLabel = QLabel("")
         self.lastUpdateLabel.setStyleSheet("color: #9ca3af; font-size: 12px;")
@@ -310,7 +392,6 @@ class CurrencyConverter(QWidget):
         self.statusLabel.setText(text)
 
     def _create_button(self, text: str, callback, object_name: Optional[str] = None) -> QPushButton:
-        """Create a QPushButton with an optional object name and connect it."""
         button = QPushButton(text, self)
         if object_name:
             button.setObjectName(object_name)
@@ -318,7 +399,7 @@ class CurrencyConverter(QWidget):
         return button
 
     def _populate_currency_selectors(self) -> None:
-        """Fill the currency combo boxes with available currency codes."""
+        """Fill the currency combo boxes with choices."""
         self.sourceCurrencySelector.clear()
         self.targetCurrencySelector.clear()
 
@@ -327,7 +408,7 @@ class CurrencyConverter(QWidget):
             self.sourceCurrencySelector.addItem(label)
             self.targetCurrencySelector.addItem(label)
 
-        # Set some reasonable defaults if available.
+        # Set some reasonable defaults if available
         usd_label = "USD ($)"
         eur_label = "EUR (€)"
 
@@ -442,7 +523,7 @@ class CurrencyConverter(QWidget):
         self.targetCurrencySelector.setCurrentIndex(source_index)
 
         if self.last_converted_value is not None:
-            # Use the previous result as the new amount.
+            # Use the previous result as the new amount
             self.amountInput.setText(f"{self.last_converted_value:.2f}")
 
         if self.amountInput.text().strip():
@@ -457,18 +538,12 @@ class CurrencyConverter(QWidget):
         self._set_status("Cleared.", error=False)
 
     def on_show_chart(self) -> None:
-        """Open or update a window with a chart of historical rate changes.
-
-        The data comes from the locally stored history JSON file which
-        you can build with the separate `build_history.py` script.
-        """
+        """Open a window with a chart of historical rate changes."""
         if not MATPLOTLIB_AVAILABLE:
             self._set_status("Matplotlib is not installed – charts are unavailable.", error=True)
             return
 
-        # Load or create the history list from the API helper. The heavy work
-        # of downloading and saving history is done outside the GUI.
-        history = self.api.get_history()
+        history = self.api.get_or_create_history(days=365)
         if len(history) < 2:
             self._set_status("Not enough history yet to draw a chart.", error=False)
             return
@@ -478,8 +553,7 @@ class CurrencyConverter(QWidget):
         source_currency = self.extract_currency_code(source_label)
         target_currency = self.extract_currency_code(target_label)
 
-        # Always create a fresh chart window so that each request uses the
-        # current pair and history, and the user has a dedicated "Back" button.
+        # Reuse single chart window instance
         self.chart_window = RatesChartWindow(history, source_currency, target_currency, self)
         self.chart_window.show()
         self.chart_window.raise_()
